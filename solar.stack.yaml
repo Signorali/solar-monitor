@@ -24,6 +24,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-solar}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
       TZ: Europe/Istanbul
+      # Raspberry Pi cmdline'da cgroup_disable=memory var → timescaledb-tune init'te
+      # memory.max okuyamayıp panic ediyordu (taze Pi db çökmesi). Tune'u atla → varsayılan konf.
+      NO_TS_TUNE: "true"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro   # bundle ile gelir
