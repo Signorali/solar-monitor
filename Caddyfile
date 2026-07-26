@@ -1,0 +1,21 @@
+# Solar Monitor reverse proxy
+:80 {
+    # API requests (REST + WebSocket) → backend
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /ws {
+        reverse_proxy backend:8000
+    }
+
+    # Static frontend
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    encode gzip
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,101 @@
+# ============================================================================
+# Solar Monitor — TAŞINABİLİR kurulum/kurtarma compose'u (Docker Hub tabanlı)
+# ----------------------------------------------------------------------------
+# Formatlı YENİ bir Raspberry Pi'de:  docker compose -f solar.stack.yaml up -d
+# → imajları Docker Hub'dan ÇEKER (build yok). Veri geri yükleme için restore.sh.
+# Qnap KULLANILMAZ. .env ile birlikte çalışır (HUB_USER + TAG + parolalar orada).
+#
+# Orijinal docker-compose.yml'den FARKLAR (araştırma bulgularıyla):
+#   - build: → image: <HUB_USER>/...:${TAG}   (Hub'dan çeker)
+#   - backend ./backend:/app bind-mount KALDIRILDI  (taze Pi'de #1 tuzak: boş
+#     dizin image'ın /app'ini ezer → backend açılmaz)
+#   - timescaledb tag'i SABİTLENDİ  (latest-pg16 kayan tag; dump/restore uyumu için)
+# ============================================================================
+name: solar
+
+services:
+  db:
+    image: timescale/timescaledb:2.27.1-pg16   # SABİT: canlı Timescale 2.27.1 → dump'la eşit (restore downgrade OLMAZ)
+    container_name: solar_db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-solar}
+      POSTGRES_USER: ${POSTGRES_USER:-solar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      TZ: Europe/Istanbul
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro   # bundle ile gelir
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${HUB_USER:?set HUB_USER in .env}/solar-backend:${TAG:-latest}
+    container_name: solar_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-solar}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-solar}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?required}
+      JWT_SECRET: ${JWT_SECRET:?required}
+      TZ: Europe/Istanbul
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      BLE_GATEWAY_URL: http://172.17.0.1:8081
+    volumes:
+      # NOT: ./backend:/app bind-mount BİLEREK YOK (kod image'dan gelir)
+      - /opt/solar-reboot:/reboot-flag
+      - /opt/solar-golden:/golden-flag
+    devices:
+      - /dev/solar_mppt:/dev/solar_mppt
+      - /dev/solar_bms:/dev/solar_bms
+      - /dev/solar_inverter:/dev/solar_inverter
+    expose:
+      - "8000"
+
+  frontend:
+    image: ${HUB_USER:?set HUB_USER in .env}/solar-frontend:${TAG:-latest}
+    container_name: solar_frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  proxy:
+    image: caddy:2-alpine
+    container_name: solar_proxy
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro   # bundle ile gelir
+      - caddy_data:/data
+      - caddy_config:/config
+
+  ble_gateway:
+    image: ${HUB_USER:?set HUB_USER in .env}/solar-ble_gateway:${TAG:-latest}
+    container_name: solar_ble_gateway
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+    environment:
+      TZ: Europe/Istanbul
+
+volumes:
+  caddy_data:
+  caddy_config:

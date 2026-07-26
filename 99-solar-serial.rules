@@ -1,0 +1,17 @@
+# Solar monitoring stable serial device names.
+# CH340/CH341 chips lack iSerial; identifying by USB hub port path.
+# FTDI (eSmart3 MPPT) has a unique serial → matched by ATTRS{serial} (port-bağımsız, en sağlam).
+# Physical wiring must be preserved for the CH341 devices (if cables swap ports, symlinks remap).
+#
+# Port topology (Raspberry Pi 4, internal VIA hub):
+#   1-1.2 => eSmart3 MPPT (FTDI, I-Panda protocol 9600 8N1)  — PZEM'lerin yerine
+#   1-1.3 => Inverter     (Voltronic PI30 ASCII 2400)
+#   1-1.4 => JK-BMS       (UART JK protocol 115200)
+
+# eSmart3 MPPT — FTDI FT232 (seri numarasıyla eşlenir; hangi porta takılırsa takılsın solar_mppt olur)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="A50285BI", SYMLINK+="solar_mppt", GROUP="dialout", MODE="0660"
+# Yedek: FTDI tek ise (seri değişirse) yine solar_mppt — tek FTDI varsayımı
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SYMLINK+="solar_mppt", GROUP="dialout", MODE="0660"
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", KERNELS=="1-1.3", SYMLINK+="solar_inverter", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", KERNELS=="1-1.4", SYMLINK+="solar_bms",      GROUP="dialout", MODE="0660"
