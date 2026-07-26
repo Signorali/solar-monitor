@@ -173,8 +173,11 @@ class H(BaseHTTPRequestHandler):
             self.w(">>> %d MB alındı, açılıyor...\n" % (got // 1048576))
             if got < 1024:
                 self.w("HATA: yedek boş/eksik.\n"); return
-            # bundle'ı SOLAR_DIR içine düz aç (üstteki solar-backup-* klasörünü at)
-            rc = self._run(["tar", "xzf", up, "-C", SOLAR_DIR, "--strip-components=1"])
+            # bundle'ı SOLAR_DIR içine düz aç (üstteki solar-backup-* klasörünü at).
+            # stack.yaml + restore.sh HARİÇ: install.sh'in indirdiği GÜNCEL repo sürümleri
+            # kalsın (eski bir yedek NO_TS_TUNE fix'ini ezmesin). Yedek yalnız .env + veri verir.
+            rc = self._run(["tar", "xzf", up, "-C", SOLAR_DIR, "--strip-components=1",
+                            "--exclude=*/solar.stack.yaml", "--exclude=*/restore.sh"])
             if rc != 0:
                 self.w("HATA: arşiv açılamadı (bozuk .tgz?).\n"); return
             os.remove(up)
